@@ -1,0 +1,6 @@
+{
+  "name": "BlueTrack",
+  "description": "Smart Bluetooth peripheral connection monitor that delivers instant alerts on connect/disconnect events with detailed history logging and telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
