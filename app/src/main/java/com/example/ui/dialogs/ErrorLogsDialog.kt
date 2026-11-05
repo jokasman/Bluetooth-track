@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,13 +15,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -121,24 +126,36 @@ fun ErrorLogsDialog(
     errorLogs.count { it.severity == BluetoothErrorLogEntity.SEVERITY_WARNING }
   }
 
+  BackHandler(onBack = onDismiss)
+
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false)
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      decorFitsSystemWindows = false
+    )
   ) {
-    Surface(
+    Box(
       modifier = Modifier
         .fillMaxSize()
-        .padding(horizontal = 12.dp, vertical = 24.dp)
-        .testTag("error_logs_dialog_surface"),
-      shape = RoundedCornerShape(24.dp),
-      color = MaterialTheme.colorScheme.surface,
-      tonalElevation = 6.dp
+        .windowInsetsPadding(WindowInsets.safeDrawing)
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+        .imePadding(),
+      contentAlignment = Alignment.Center
     ) {
-      Column(
+      Surface(
         modifier = Modifier
           .fillMaxSize()
-          .padding(16.dp)
+          .testTag("error_logs_dialog_surface"),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp
       ) {
+        Column(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+        ) {
         // Top Header Row
         Row(
           verticalAlignment = Alignment.CenterVertically,
@@ -336,33 +353,36 @@ fun ErrorLogsDialog(
         // Bottom Actions Bar
         Row(
           verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
           modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp)
+            .padding(top = 10.dp)
         ) {
           OutlinedButton(
             onClick = { viewModel.logTestError() },
             modifier = Modifier
               .weight(1f)
+              .height(48.dp)
               .testTag("trigger_test_error_bottom_button"),
             shape = RoundedCornerShape(12.dp)
           ) {
             Text("Simulate Test Error", fontSize = 12.sp)
           }
-          Spacer(modifier = Modifier.width(10.dp))
           Button(
             onClick = onDismiss,
             modifier = Modifier
               .weight(1f)
+              .height(48.dp)
               .testTag("dismiss_error_logs_dialog_button"),
             shape = RoundedCornerShape(12.dp)
           ) {
-            Text("Done", fontSize = 12.sp)
+            Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
           }
         }
       }
     }
   }
+}
 
   // Clear Confirmation
   if (showClearConfirm) {
