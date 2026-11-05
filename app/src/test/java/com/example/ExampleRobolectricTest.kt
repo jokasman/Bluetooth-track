@@ -46,4 +46,35 @@ class ExampleUnitTestLogic {
     assertEquals("My Daily Driver", peripheral.displayName)
     assertTrue(peripheral.isAntiLostEnabled)
   }
+
+  @Test
+  fun pairedDevice_deduplicationLogic_filtersTrackedAddresses() {
+    val trackedAddresses = setOf("AA:BB:CC:DD:EE:01", "AA:BB:CC:DD:EE:02")
+    val allPaired = listOf(
+      "AA:BB:CC:DD:EE:01",
+      "aa:bb:cc:dd:ee:02",
+      "AA:BB:CC:DD:EE:03"
+    )
+    val unrecorded = allPaired.filter { it.uppercase() !in trackedAddresses }
+    assertEquals(1, unrecorded.size)
+    assertEquals("AA:BB:CC:DD:EE:03", unrecorded.first())
+  }
+
+  @Test
+  fun bluetoothErrorLog_crashSeverity_preservesStackTraceAndDevice() {
+    val log = com.example.data.model.BluetoothErrorLogEntity(
+      id = 1L,
+      timestamp = 1000L,
+      tag = "CrashHandler",
+      message = "NullPointerException in test",
+      stackTrace = "java.lang.NullPointerException\n\tat com.example.Test.run(Test.kt:10)",
+      severity = com.example.data.model.BluetoothErrorLogEntity.SEVERITY_CRASH,
+      deviceAddress = "AA:BB:CC:DD:EE:FF",
+      deviceName = "My Headphones"
+    )
+    assertEquals(com.example.data.model.BluetoothErrorLogEntity.SEVERITY_CRASH, log.severity)
+    assertEquals("CrashHandler", log.tag)
+    assertTrue(log.stackTrace?.contains("NullPointerException") == true)
+    assertEquals("My Headphones", log.deviceName)
+  }
 }

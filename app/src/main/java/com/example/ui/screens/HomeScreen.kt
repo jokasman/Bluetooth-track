@@ -401,7 +401,7 @@ fun HomeScreen(
         }
       }
     } else {
-      items(connectedPeripherals, key = { it.deviceAddress }) { peripheral ->
+      items(connectedPeripherals, key = { "connected_${it.deviceAddress}" }) { peripheral ->
         Card(
           shape = RoundedCornerShape(16.dp),
           colors = CardDefaults.cardColors(
@@ -537,7 +537,7 @@ fun HomeScreen(
         }
       }
     } else {
-      items(recentEvents, key = { it.id }) { event ->
+      items(recentEvents, key = { "recent_${it.id}" }) { event ->
         RecentEventRow(
           event = event,
           onClick = { selectedEventForDetail = event }

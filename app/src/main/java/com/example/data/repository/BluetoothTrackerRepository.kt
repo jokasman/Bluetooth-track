@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import com.example.data.local.AppDatabase
+import com.example.data.model.BluetoothErrorLogEntity
 import com.example.data.model.BluetoothEventEntity
 import com.example.data.model.TrackedPeripheralEntity
 import com.example.notification.NotificationHelper
@@ -19,6 +20,7 @@ class BluetoothTrackerRepository(
 ) {
   private val eventDao = database.bluetoothEventDao()
   private val peripheralDao = database.trackedPeripheralDao()
+  private val errorLogDao = database.bluetoothErrorLogDao()
   private val prefs = PreferencesManager.getInstance(context)
 
   val allEvents: Flow<List<BluetoothEventEntity>> = eventDao.getAllEvents()
@@ -26,6 +28,8 @@ class BluetoothTrackerRepository(
   val connectedPeripherals: Flow<List<TrackedPeripheralEntity>> = peripheralDao.getConnectedPeripherals()
   val connectedCount: Flow<Int> = peripheralDao.getConnectedCount()
   val totalEventCount: Flow<Int> = eventDao.getTotalEventCount()
+  val allErrorLogs: Flow<List<BluetoothErrorLogEntity>> = errorLogDao.getAllLogs()
+  val errorLogCount: Flow<Int> = errorLogDao.getErrorCount()
 
   fun getRecentEvents(limit: Int): Flow<List<BluetoothEventEntity>> = eventDao.getRecentEvents(limit)
 
@@ -221,8 +225,39 @@ class BluetoothTrackerRepository(
     eventDao.clearAllEvents()
   }
 
+  suspend fun trackDevice(
+    deviceName: String,
+    deviceAddress: String,
+    deviceType: String
+  ): TrackedPeripheralEntity = withContext(Dispatchers.IO) {
+    val existing = peripheralDao.getPeripheralByAddress(deviceAddress)
+    if (existing != null) {
+      existing
+    } else {
+      val newEntity = TrackedPeripheralEntity(
+        deviceAddress = deviceAddress,
+        deviceName = deviceName,
+        customNickname = null,
+        deviceType = deviceType,
+        isConnected = false,
+        lastConnectedTimestamp = 0L,
+        totalConnectionCount = 0
+      )
+      peripheralDao.upsertPeripheral(newEntity)
+      newEntity
+    }
+  }
+
   suspend fun deletePeripheral(address: String) = withContext(Dispatchers.IO) {
     peripheralDao.deletePeripheral(address)
+  }
+
+  suspend fun deleteErrorLog(id: Long) = withContext(Dispatchers.IO) {
+    errorLogDao.deleteLogById(id)
+  }
+
+  suspend fun clearAllErrorLogs() = withContext(Dispatchers.IO) {
+    errorLogDao.clearAllLogs()
   }
 
   companion object {

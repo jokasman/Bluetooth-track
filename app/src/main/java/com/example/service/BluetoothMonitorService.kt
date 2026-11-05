@@ -74,6 +74,10 @@ class BluetoothMonitorService : Service() {
 
     // Guard against starting FGS connectedDevice without runtime permissions (Android 14+)
     if (!hasForegroundServicePermission(this)) {
+      com.example.util.BluetoothLogger.logWarning(
+        tag = "BluetoothMonitorService",
+        message = "Attempted to start Foreground Service without BLUETOOTH_CONNECT permission"
+      )
       stopSelf()
       return START_NOT_STICKY
     }
@@ -91,9 +95,19 @@ class BluetoothMonitorService : Service() {
       }
       setupMonitoring()
     } catch (e: SecurityException) {
+      com.example.util.BluetoothLogger.logError(
+        tag = "BluetoothMonitorService",
+        message = "SecurityException while starting foreground service",
+        throwable = e
+      )
       stopSelf()
       return START_NOT_STICKY
     } catch (e: Exception) {
+      com.example.util.BluetoothLogger.logError(
+        tag = "BluetoothMonitorService",
+        message = "Exception while starting foreground service",
+        throwable = e
+      )
       stopSelf()
       return START_NOT_STICKY
     }

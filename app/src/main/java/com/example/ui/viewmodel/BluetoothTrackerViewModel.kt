@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.model.BluetoothErrorLogEntity
 import com.example.data.model.BluetoothEventEntity
 import com.example.data.model.TrackedPeripheralEntity
 import com.example.data.repository.BluetoothTrackerRepository
@@ -17,6 +18,7 @@ import com.example.notification.NotificationHelper
 import com.example.service.ActiveAlarmState
 import com.example.service.AntiLostAlarmManager
 import com.example.service.BluetoothMonitorService
+import com.example.util.BluetoothLogger
 import com.example.util.PreferencesManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -68,6 +70,12 @@ class BluetoothTrackerViewModel(application: Application) : AndroidViewModel(app
 
   val recentEvents: StateFlow<List<BluetoothEventEntity>> = repository.getRecentEvents(8)
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val errorLogs: StateFlow<List<BluetoothErrorLogEntity>> = repository.allErrorLogs
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val errorLogCount: StateFlow<Int> = repository.errorLogCount
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
   private val _searchQuery = MutableStateFlow("")
   val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -284,18 +292,45 @@ class BluetoothTrackerViewModel(application: Application) : AndroidViewModel(app
         context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
       val adapter = bluetoothManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
       if (adapter != null && adapter.isEnabled) {
-        val bonded = adapter.bondedDevices
+        val bonded = try { adapter.bondedDevices } catch (_: SecurityException) { null }
         if (bonded != null) {
-          val list = bonded.map { dev ->
-            val name = dev.name ?: "Unnamed Device"
-            val type = BluetoothTrackerRepository.parseDeviceType(dev.bluetoothClass)
-            PairedDeviceItem(name = name, address = dev.address, type = type)
+          val list = bonded.mapNotNull { dev ->
+            try {
+              val address = try { dev.address } catch (_: SecurityException) { null }
+              if (address.isNullOrBlank()) return@mapNotNull null
+              val name = try { dev.name } catch (_: SecurityException) { null } ?: "Bluetooth Device"
+              val type = try {
+                BluetoothTrackerRepository.parseDeviceType(dev.bluetoothClass)
+              } catch (_: Exception) {
+                "Bluetooth Device"
+              }
+              PairedDeviceItem(
+                name = name.ifBlank { "Bluetooth Device" },
+                address = address,
+                type = type
+              )
+            } catch (_: Exception) {
+              null
+            }
           }
           _pairedDevices.value = list
         }
       }
     } catch (e: Exception) {
+      BluetoothLogger.logWarning("PairedDevices", "Failed to query system paired devices", e)
       _pairedDevices.value = emptyList()
+    }
+  }
+
+  fun trackPairedDevice(
+    name: String,
+    address: String,
+    type: String,
+    onTracked: ((TrackedPeripheralEntity) -> Unit)? = null
+  ) {
+    viewModelScope.launch {
+      val entity = repository.trackDevice(name, address, type)
+      onTracked?.invoke(entity)
     }
   }
 
@@ -314,6 +349,49 @@ class BluetoothTrackerViewModel(application: Application) : AndroidViewModel(app
       sb.append("\"${event.deviceType}\",")
       sb.append("$durationSec,")
       sb.append("${event.isSimulated}\n")
+    }
+    return sb.toString()
+  }
+
+  fun deleteErrorLog(id: Long) {
+    viewModelScope.launch {
+      repository.deleteErrorLog(id)
+    }
+  }
+
+  fun clearAllErrorLogs() {
+    viewModelScope.launch {
+      repository.clearAllErrorLogs()
+    }
+  }
+
+  fun logTestError() {
+    BluetoothLogger.logError(
+      tag = "UserDiagnostics",
+      message = "User triggered diagnostic test error to verify Room logging",
+      throwable = RuntimeException("Sample diagnostic stack trace captured by BlueTrackLogger"),
+      deviceName = "Test Peripheral",
+      deviceAddress = "00:11:22:33:44:55"
+    )
+  }
+
+  fun generateErrorLogsExport(): String {
+    val logs = errorLogs.value
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+    val sb = StringBuilder()
+    sb.append("=== BLUETRACK ERROR & CRASH DIAGNOSTIC LOGS ===\n")
+    sb.append("Total entries: ${logs.size}\n\n")
+    for (log in logs) {
+      val date = sdf.format(Date(log.timestamp))
+      sb.append("[$date] [${log.severity}] [${log.tag}]\n")
+      sb.append("Message: ${log.message}\n")
+      if (!log.deviceName.isNullOrBlank()) {
+        sb.append("Device: ${log.deviceName} (${log.deviceAddress ?: "N/A"})\n")
+      }
+      if (!log.stackTrace.isNullOrBlank()) {
+        sb.append("Stack Trace:\n${log.stackTrace}\n")
+      }
+      sb.append("--------------------------------------------------\n")
     }
     return sb.toString()
   }

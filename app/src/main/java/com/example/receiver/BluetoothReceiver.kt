@@ -53,6 +53,14 @@ class BluetoothReceiver : BroadcastReceiver() {
             )
           }
         }
+      } catch (e: Exception) {
+        com.example.util.BluetoothLogger.logError(
+          tag = "BluetoothReceiver",
+          message = "Error handling Bluetooth intent action: $action",
+          throwable = e,
+          deviceName = deviceName,
+          deviceAddress = deviceAddress
+        )
       } finally {
         pendingResult.finish()
       }
@@ -74,21 +82,24 @@ class BluetoothReceiver : BroadcastReceiver() {
       true
     }
 
-    val extraName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME)
+    val extraName = try { intent.getStringExtra(BluetoothDevice.EXTRA_NAME) } catch (_: Exception) { null }
+
+    val rawAddress = try {
+      device.address
+    } catch (_: Exception) {
+      null
+    } ?: "00:00:00:00:00:00"
+
+    val shortSuffix = if (rawAddress.length >= 5) rawAddress.takeLast(5) else "Dev"
+
     val name = try {
       if (hasConnectPermission) {
-        device.name ?: extraName ?: "Peripheral (${device.address.takeLast(5)})"
+        device.name ?: extraName ?: "Peripheral ($shortSuffix)"
       } else {
-        extraName ?: "Peripheral (${device.address.takeLast(5)})"
+        extraName ?: "Peripheral ($shortSuffix)"
       }
-    } catch (e: SecurityException) {
+    } catch (_: Exception) {
       extraName ?: "Bluetooth Device"
-    }
-
-    val address = try {
-      device.address ?: "00:00:00:00:00:00"
-    } catch (e: SecurityException) {
-      "Unknown MAC"
     }
 
     val deviceType = try {
@@ -97,10 +108,10 @@ class BluetoothReceiver : BroadcastReceiver() {
       } else {
         "Bluetooth Peripheral"
       }
-    } catch (e: SecurityException) {
+    } catch (_: Exception) {
       "Bluetooth Peripheral"
     }
 
-    return Triple(name, address, deviceType)
+    return Triple(name, rawAddress, deviceType)
   }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
@@ -26,8 +27,11 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Watch
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -35,6 +39,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.dialogs.ErrorLogsDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,8 +95,10 @@ fun BlueTrackMainApp(
   viewModel: BluetoothTrackerViewModel = viewModel()
 ) {
   val context = LocalContext.current
+  val errorLogCount by viewModel.errorLogCount.collectAsStateWithLifecycle()
   var selectedTab by remember { mutableIntStateOf(initialTab) }
   var showSimulateDialog by remember { mutableStateOf(false) }
+  var showDiagnosticsDialog by remember { mutableStateOf(false) }
 
   // Permissions state
   var hasNotificationPermission by remember {
@@ -187,7 +195,32 @@ fun BlueTrackMainApp(
         colors = TopAppBarDefaults.topAppBarColors(
           containerColor = MaterialTheme.colorScheme.surface,
           titleContentColor = MaterialTheme.colorScheme.onSurface
-        )
+        ),
+        actions = {
+          IconButton(
+            onClick = { showDiagnosticsDialog = true },
+            modifier = Modifier.testTag("topbar_diagnostics_button")
+          ) {
+            BadgedBox(
+              badge = {
+                if (errorLogCount > 0) {
+                  Badge(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                  ) {
+                    Text("$errorLogCount")
+                  }
+                }
+              }
+            ) {
+              Icon(
+                imageVector = Icons.Default.BugReport,
+                contentDescription = "Diagnostic Error Logs",
+                tint = if (errorLogCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          }
+        }
       )
     },
     bottomBar = {
@@ -288,6 +321,14 @@ fun BlueTrackMainApp(
       onSimulate = { name, address, type, isConnect ->
         viewModel.simulateEvent(name, address, type, isConnect)
       }
+    )
+  }
+
+  // Diagnostic Error & Crash Logs Dialog
+  if (showDiagnosticsDialog) {
+    ErrorLogsDialog(
+      viewModel = viewModel,
+      onDismiss = { showDiagnosticsDialog = false }
     )
   }
 }

@@ -4,17 +4,23 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.data.model.BluetoothErrorLogEntity
 import com.example.data.model.BluetoothEventEntity
 import com.example.data.model.TrackedPeripheralEntity
 
 @Database(
-  entities = [BluetoothEventEntity::class, TrackedPeripheralEntity::class],
-  version = 2,
+  entities = [
+    BluetoothEventEntity::class,
+    TrackedPeripheralEntity::class,
+    BluetoothErrorLogEntity::class
+  ],
+  version = 3,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
   abstract fun bluetoothEventDao(): BluetoothEventDao
   abstract fun trackedPeripheralDao(): TrackedPeripheralDao
+  abstract fun bluetoothErrorLogDao(): BluetoothErrorLogDao
 
   companion object {
     @Volatile

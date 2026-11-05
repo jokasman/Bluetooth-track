@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
@@ -54,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.ActiveAlarmBanner
+import com.example.ui.dialogs.ErrorLogsDialog
 import com.example.ui.theme.ConnectedGreen
 import com.example.ui.theme.DisconnectedRed
 import com.example.ui.viewmodel.BluetoothTrackerViewModel
@@ -81,8 +84,10 @@ fun SettingsScreen(
   val autoStartOnBoot by viewModel.autoStartOnBoot.collectAsStateWithLifecycle()
   val globalAlertByDefault by viewModel.globalAlertByDefault.collectAsStateWithLifecycle()
   val activeAlarm by viewModel.activeAlarm.collectAsStateWithLifecycle()
+  val errorLogCount by viewModel.errorLogCount.collectAsStateWithLifecycle()
 
   var showClearConfirmDialog by remember { mutableStateOf(false) }
+  var showErrorLogsDialog by remember { mutableStateOf(false) }
 
   val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
   val isBluetoothEnabled = bluetoothManager?.adapter?.isEnabled ?: false
@@ -472,7 +477,91 @@ fun SettingsScreen(
       }
     }
 
-    // 7. About BlueTrack Card
+    // 7. Diagnostic & Error Logs
+    item {
+      Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+          containerColor = if (errorLogCount > 0) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+          } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+          }
+        ),
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.BugReport,
+              contentDescription = null,
+              tint = if (errorLogCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "DIAGNOSTIC & CRASH LOGS",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              color = if (errorLogCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = if (errorLogCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant
+            ) {
+              Text(
+                text = "$errorLogCount recorded",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (errorLogCount > 0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          Text(
+            text = "Bluetooth exceptions, permission warnings, and unexpected crashes are safely saved in Room so you can inspect and copy stack traces for troubleshooting.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Button(
+              onClick = { showErrorLogsDialog = true },
+              modifier = Modifier
+                .weight(1.2f)
+                .testTag("inspect_error_logs_button"),
+              shape = RoundedCornerShape(12.dp),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (errorLogCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+              )
+            ) {
+              Text("Inspect Logs", fontSize = 12.sp)
+            }
+
+            OutlinedButton(
+              onClick = { viewModel.logTestError() },
+              modifier = Modifier
+                .weight(1f)
+                .testTag("simulate_test_error_settings_button"),
+              shape = RoundedCornerShape(12.dp)
+            ) {
+              Text("Test Log", fontSize = 12.sp)
+            }
+          }
+        }
+      }
+    }
+
+    // 8. About BlueTrack Card
     item {
       Card(
         shape = RoundedCornerShape(18.dp),
@@ -498,7 +587,7 @@ fun SettingsScreen(
           }
           Spacer(modifier = Modifier.height(4.dp))
           Text(
-            text = "Smart Bluetooth peripheral connection monitor with customizable per-device alerts and unmissable continuous anti-lost separation alarms.",
+            text = "Smart Bluetooth peripheral connection monitor with customizable per-device alerts, unmissable continuous anti-lost separation alarms, and local crash diagnostics.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -533,6 +622,14 @@ fun SettingsScreen(
           Text("Cancel")
         }
       }
+    )
+  }
+
+  // Error & Crash Diagnostics Inspector Dialog
+  if (showErrorLogsDialog) {
+    ErrorLogsDialog(
+      viewModel = viewModel,
+      onDismiss = { showErrorLogsDialog = false }
     )
   }
 }

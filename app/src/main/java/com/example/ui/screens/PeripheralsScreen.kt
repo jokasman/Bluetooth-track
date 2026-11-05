@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -92,6 +94,22 @@ fun PeripheralsScreen(
     }
   }
 
+  val trackedAddresses = remember(peripherals) {
+    peripherals.map { it.deviceAddress.trim().uppercase() }.toSet()
+  }
+
+  val unrecordedPairedDevices = remember(pairedDevices, trackedAddresses, searchQuery) {
+    pairedDevices.filter { paired ->
+      val cleanAddr = paired.address.trim().uppercase()
+      cleanAddr.isNotEmpty() && cleanAddr !in trackedAddresses && (
+        searchQuery.isBlank() ||
+          paired.name.contains(searchQuery, ignoreCase = true) ||
+          paired.address.contains(searchQuery, ignoreCase = true) ||
+          paired.type.contains(searchQuery, ignoreCase = true)
+      )
+    }
+  }
+
   LazyColumn(
     modifier = modifier
       .fillMaxSize()
@@ -101,7 +119,7 @@ fun PeripheralsScreen(
   ) {
     // 0. Emergency Active Alarm Banner
     if (activeAlarm != null) {
-      item {
+      item(key = "active_alarm_banner") {
         ActiveAlarmBanner(
           alarmState = activeAlarm,
           onDismiss = { viewModel.dismissActiveAlarm() },
@@ -110,7 +128,7 @@ fun PeripheralsScreen(
       }
     }
 
-    item {
+    item(key = "tracked_peripherals_header") {
       Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth()
@@ -136,7 +154,7 @@ fun PeripheralsScreen(
       }
     }
 
-    item {
+    item(key = "peripheral_search_bar") {
       OutlinedTextField(
         value = searchQuery,
         onValueChange = { searchQuery = it },
@@ -150,7 +168,7 @@ fun PeripheralsScreen(
     }
 
     if (filteredPeripherals.isEmpty()) {
-      item {
+      item(key = "empty_peripherals_card") {
         Card(
           shape = RoundedCornerShape(16.dp),
           colors = CardDefaults.cardColors(
@@ -193,7 +211,7 @@ fun PeripheralsScreen(
         }
       }
     } else {
-      items(filteredPeripherals, key = { it.deviceAddress }) { peripheral ->
+      items(filteredPeripherals, key = { "tracked_${it.deviceAddress}" }) { peripheral ->
         PeripheralCard(
           peripheral = peripheral,
           onConfigure = { configuringPeripheral = peripheral },
@@ -204,25 +222,46 @@ fun PeripheralsScreen(
       }
     }
 
-    // Android System Paired Devices Section (if any detected)
-    if (pairedDevices.isNotEmpty()) {
-      item {
+    // Android System Paired Devices Section (unrecorded peripherals)
+    if (unrecordedPairedDevices.isNotEmpty()) {
+      item(key = "section_header_paired_devices") {
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
-          text = "PAIRED IN SYSTEM SETTINGS (${pairedDevices.size})",
-          style = MaterialTheme.typography.labelMedium,
-          fontWeight = FontWeight.Bold,
-          color = MaterialTheme.colorScheme.primary
-        )
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Text(
+            text = "PAIRED IN SYSTEM SETTINGS (${unrecordedPairedDevices.size})",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+          )
+          Spacer(modifier = Modifier.weight(1f))
+          Text(
+            text = "Tap to track & protect",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
       }
 
-      items(pairedDevices, key = { it.address }) { device ->
+      itemsIndexed(
+        unrecordedPairedDevices,
+        key = { index, device -> "untracked_paired_${device.address}_$index" }
+      ) { _, device ->
         Card(
           shape = RoundedCornerShape(12.dp),
           colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
           ),
-          modifier = Modifier.fillMaxWidth()
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable {
+              viewModel.trackPairedDevice(device.name, device.address, device.type) { entity ->
+                configuringPeripheral = entity
+              }
+            }
+            .testTag("paired_device_${device.address}")
         ) {
           Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -245,6 +284,18 @@ fun PeripheralsScreen(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            FilledTonalButton(
+              onClick = {
+                viewModel.trackPairedDevice(device.name, device.address, device.type) { entity ->
+                  configuringPeripheral = entity
+                }
+              },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+              modifier = Modifier.testTag("track_device_button_${device.address}")
+            ) {
+              Text("Track", fontSize = 11.sp)
             }
           }
         }

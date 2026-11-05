@@ -239,7 +239,7 @@ fun HistoryScreen(
         }
       }
     } else {
-      items(filteredEvents, key = { it.id }) { event ->
+      items(filteredEvents, key = { "event_${it.id}" }) { event ->
         HistoryEventCard(
           event = event,
           onClick = { selectedEventForDetail = event }
