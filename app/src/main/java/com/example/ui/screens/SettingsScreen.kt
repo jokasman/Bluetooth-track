@@ -20,14 +20,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -35,7 +38,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,7 +60,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.ActiveAlarmBanner
 import com.example.ui.theme.ConnectedGreen
+import com.example.ui.theme.DisconnectedRed
 import com.example.ui.viewmodel.BluetoothTrackerViewModel
 
 @Composable
@@ -75,6 +79,8 @@ fun SettingsScreen(
   val notifyOnDisconnect by viewModel.notifyOnDisconnect.collectAsStateWithLifecycle()
   val vibrateOnAlert by viewModel.vibrateOnAlert.collectAsStateWithLifecycle()
   val autoStartOnBoot by viewModel.autoStartOnBoot.collectAsStateWithLifecycle()
+  val globalAlertByDefault by viewModel.globalAlertByDefault.collectAsStateWithLifecycle()
+  val activeAlarm by viewModel.activeAlarm.collectAsStateWithLifecycle()
 
   var showClearConfirmDialog by remember { mutableStateOf(false) }
 
@@ -88,6 +94,17 @@ fun SettingsScreen(
     contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    // 0. Active Emergency Alarm Banner
+    if (activeAlarm != null) {
+      item {
+        ActiveAlarmBanner(
+          alarmState = activeAlarm,
+          onDismiss = { viewModel.dismissActiveAlarm() },
+          onSnooze = { viewModel.snoozeActiveAlarm(2) }
+        )
+      }
+    }
+
     item {
       Column {
         Text(
@@ -96,14 +113,113 @@ fun SettingsScreen(
           fontWeight = FontWeight.Bold
         )
         Text(
-          text = "Configure background monitoring and notification preferences",
+          text = "Configure notification defaults, anti-lost alarms, and background service",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )
       }
     }
 
-    // Notification Preferences
+    // 1. Global Default Notification Policy
+    item {
+      Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+          containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Text(
+            text = "DEFAULT ALERT POLICY",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+          )
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          SettingToggleRow(
+            title = "Alert by Default for All Devices",
+            subtitle = if (globalAlertByDefault) {
+              "Opt-out mode: Newly discovered devices trigger notifications unless muted."
+            } else {
+              "Opt-in mode: Only devices explicitly set to 'Always Alert' or 'Anti-Lost' notify you."
+            },
+            icon = Icons.Default.Policy,
+            checked = globalAlertByDefault,
+            onCheckedChange = { viewModel.setGlobalAlertByDefault(it) },
+            testTag = "toggle_global_alert_default"
+          )
+        }
+      }
+    }
+
+    // 2. Anti-Lost Item Protection Summary & Test
+    item {
+      Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+          containerColor = DisconnectedRed.copy(alpha = 0.08f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DisconnectedRed.copy(alpha = 0.4f)),
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.Shield,
+              contentDescription = null,
+              tint = DisconnectedRed,
+              modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Anti-Lost Item Protection",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = DisconnectedRed
+              )
+              Text(
+                text = "Never leave headphones or keys behind",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          Text(
+            text = "Protect critical peripherals in the 'Peripherals' tab. When a protected item disconnects, a continuous high-volume alarm sounds until you press Dismiss or Snooze (2m).",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          OutlinedButton(
+            onClick = {
+              viewModel.testAntiLostAlarm("Test Headphones", "AA:BB:CC:DD:EE:99")
+            },
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("test_anti_lost_alarm_settings_button"),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+              contentColor = DisconnectedRed
+            )
+          ) {
+            Icon(imageVector = Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Test Continuous Alarm & Snooze Now")
+          }
+        }
+      }
+    }
+
+    // 3. Notification Preferences
     item {
       Card(
         shape = RoundedCornerShape(18.dp),
@@ -170,7 +286,7 @@ fun SettingsScreen(
       }
     }
 
-    // Background Service Settings
+    // 4. Background Service Settings
     item {
       Card(
         shape = RoundedCornerShape(18.dp),
@@ -212,7 +328,7 @@ fun SettingsScreen(
       }
     }
 
-    // Android Permissions Status Card
+    // 5. Android Permissions Status Card
     item {
       Card(
         shape = RoundedCornerShape(18.dp),
@@ -271,7 +387,7 @@ fun SettingsScreen(
       }
     }
 
-    // Data Management
+    // 6. Data Management
     item {
       Card(
         shape = RoundedCornerShape(18.dp),
@@ -356,7 +472,7 @@ fun SettingsScreen(
       }
     }
 
-    // About BlueTrack Card
+    // 7. About BlueTrack Card
     item {
       Card(
         shape = RoundedCornerShape(18.dp),
@@ -375,14 +491,14 @@ fun SettingsScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "BlueTrack v1.0",
+              text = "BlueTrack v1.1",
               style = MaterialTheme.typography.titleSmall,
               fontWeight = FontWeight.Bold
             )
           }
           Spacer(modifier = Modifier.height(4.dp))
           Text(
-            text = "Smart Bluetooth peripheral connection monitor powered by local Room persistence and real-time Android ACL event dispatching.",
+            text = "Smart Bluetooth peripheral connection monitor with customizable per-device alerts and unmissable continuous anti-lost separation alarms.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )

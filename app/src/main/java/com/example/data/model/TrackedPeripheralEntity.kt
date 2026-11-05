@@ -16,8 +16,19 @@ data class TrackedPeripheralEntity(
   val totalConnectionCount: Int = 0,
   val totalConnectedDurationMs: Long = 0L,
   val isFavorite: Boolean = false,
-  val isMuted: Boolean = false
+  val isMuted: Boolean = false,
+  // Per-Device Alert & Anti-Lost Configuration
+  val alertMode: String = ALERT_MODE_DEFAULT, // DEFAULT, ALWAYS_ALERT, MUTED
+  val isAntiLostEnabled: Boolean = false,
+  val alarmOnDisconnect: Boolean = true,
+  val alarmOnConnect: Boolean = false
 ) {
   val displayName: String
     get() = if (!customNickname.isNullOrBlank()) customNickname else deviceName
+
+  companion object {
+    const val ALERT_MODE_DEFAULT = "DEFAULT"
+    const val ALERT_MODE_ALWAYS_ALERT = "ALWAYS_ALERT"
+    const val ALERT_MODE_MUTED = "MUTED"
+  }
 }

@@ -25,6 +25,10 @@ object NotificationHelper {
   private const val CHANNEL_SERVICE_NAME = "Bluetooth Monitor Service"
   private const val CHANNEL_SERVICE_DESC = "Background monitor service status"
 
+  const val CHANNEL_ANTI_LOST_ALARM_ID = "channel_anti_lost_alarm"
+  private const val CHANNEL_ANTI_LOST_ALARM_NAME = "Anti-Lost Peripheral Alarms"
+  private const val CHANNEL_ANTI_LOST_ALARM_DESC = "Urgent continuous alarms for protected accessories"
+
   const val NOTIFICATION_SERVICE_ID = 1001
   private var notificationIdCounter = 2000
 
@@ -59,6 +63,20 @@ object NotificationHelper {
         setShowBadge(false)
       }
       notificationManager.createNotificationChannel(serviceChannel)
+
+      // Channel 3: Critical Anti-Lost Alarm Channel
+      val antiLostChannel = NotificationChannel(
+        CHANNEL_ANTI_LOST_ALARM_ID,
+        CHANNEL_ANTI_LOST_ALARM_NAME,
+        NotificationManager.IMPORTANCE_HIGH
+      ).apply {
+        description = CHANNEL_ANTI_LOST_ALARM_DESC
+        enableLights(true)
+        enableVibration(true)
+        vibrationPattern = longArrayOf(0, 800, 400, 800, 400)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+      }
+      notificationManager.createNotificationChannel(antiLostChannel)
     }
   }
 

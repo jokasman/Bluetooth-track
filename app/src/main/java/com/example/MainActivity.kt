@@ -57,6 +57,7 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.PeripheralsScreen
 import com.example.ui.screens.SettingsScreen
+import android.content.Intent
 import com.example.ui.theme.ConnectedGreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.BluetoothTrackerViewModel
@@ -73,6 +74,11 @@ class MainActivity : ComponentActivity() {
         BlueTrackMainApp(initialTab = initialTab)
       }
     }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
   }
 }
 

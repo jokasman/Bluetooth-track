@@ -7,10 +7,10 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.BluetoothEventEntity
 import com.example.data.model.TrackedPeripheralEntity
 import com.example.notification.NotificationHelper
-import kotlinx.coroutines.CoroutineScope
+import com.example.service.AntiLostAlarmManager
+import com.example.util.PreferencesManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class BluetoothTrackerRepository(
@@ -19,6 +19,7 @@ class BluetoothTrackerRepository(
 ) {
   private val eventDao = database.bluetoothEventDao()
   private val peripheralDao = database.trackedPeripheralDao()
+  private val prefs = PreferencesManager.getInstance(context)
 
   val allEvents: Flow<List<BluetoothEventEntity>> = eventDao.getAllEvents()
   val allPeripherals: Flow<List<TrackedPeripheralEntity>> = peripheralDao.getAllPeripherals()
@@ -49,7 +50,6 @@ class BluetoothTrackerRepository(
 
     // Query existing peripheral record if any
     val existing = peripheralDao.getPeripheralByAddress(deviceAddress)
-    val isMuted = existing?.isMuted ?: false
     val displayName = existing?.displayName ?: deviceName
 
     // Log connection event
@@ -82,16 +82,32 @@ class BluetoothTrackerRepository(
       )
     }
 
-    // Trigger Notification
-    NotificationHelper.showPeripheralAlert(
-      context = context,
-      deviceName = displayName,
-      deviceAddress = deviceAddress,
-      deviceType = deviceType,
-      isConnected = true,
-      durationMs = null,
-      isMuted = isMuted
-    )
+    // Evaluate notification policy: Per-device override or global default
+    val shouldNotify = when (existing?.alertMode) {
+      TrackedPeripheralEntity.ALERT_MODE_ALWAYS_ALERT -> true
+      TrackedPeripheralEntity.ALERT_MODE_MUTED -> false
+      else -> {
+        if (existing?.isMuted == true) false
+        else prefs.globalAlertByDefault.value
+      }
+    }
+
+    if (shouldNotify) {
+      NotificationHelper.showPeripheralAlert(
+        context = context,
+        deviceName = displayName,
+        deviceAddress = deviceAddress,
+        deviceType = deviceType,
+        isConnected = true,
+        durationMs = null,
+        isMuted = false
+      )
+    }
+
+    // Check Anti-Lost Alarm on Connect
+    if (existing?.isAntiLostEnabled == true && existing.alarmOnConnect) {
+      AntiLostAlarmManager.startAlarm(context, displayName, deviceAddress, "CONNECTED")
+    }
   }
 
   suspend fun handleDeviceDisconnected(
@@ -112,7 +128,6 @@ class BluetoothTrackerRepository(
     }
 
     val existing = peripheralDao.getPeripheralByAddress(deviceAddress)
-    val isMuted = existing?.isMuted ?: false
     val displayName = existing?.displayName ?: deviceName
 
     // Log disconnection event
@@ -145,16 +160,32 @@ class BluetoothTrackerRepository(
       )
     }
 
-    // Trigger Notification
-    NotificationHelper.showPeripheralAlert(
-      context = context,
-      deviceName = displayName,
-      deviceAddress = deviceAddress,
-      deviceType = deviceType,
-      isConnected = false,
-      durationMs = sessionDurationMs,
-      isMuted = isMuted
-    )
+    // Evaluate notification policy: Per-device override or global default
+    val shouldNotify = when (existing?.alertMode) {
+      TrackedPeripheralEntity.ALERT_MODE_ALWAYS_ALERT -> true
+      TrackedPeripheralEntity.ALERT_MODE_MUTED -> false
+      else -> {
+        if (existing?.isMuted == true) false
+        else prefs.globalAlertByDefault.value
+      }
+    }
+
+    if (shouldNotify) {
+      NotificationHelper.showPeripheralAlert(
+        context = context,
+        deviceName = displayName,
+        deviceAddress = deviceAddress,
+        deviceType = deviceType,
+        isConnected = false,
+        durationMs = sessionDurationMs,
+        isMuted = false
+      )
+    }
+
+    // Check Anti-Lost Alarm on Disconnect (primary safeguard against forgetting items)
+    if (existing?.isAntiLostEnabled == true && existing.alarmOnDisconnect) {
+      AntiLostAlarmManager.startAlarm(context, displayName, deviceAddress, "DISCONNECTED")
+    }
   }
 
   suspend fun updateNickname(address: String, nickname: String?) = withContext(Dispatchers.IO) {
@@ -167,6 +198,19 @@ class BluetoothTrackerRepository(
 
   suspend fun toggleMuted(address: String) = withContext(Dispatchers.IO) {
     peripheralDao.toggleMuted(address)
+  }
+
+  suspend fun updateAlertMode(address: String, mode: String) = withContext(Dispatchers.IO) {
+    peripheralDao.updateAlertMode(address, mode)
+  }
+
+  suspend fun updateAntiLostConfig(
+    address: String,
+    enabled: Boolean,
+    alarmDisconnect: Boolean,
+    alarmConnect: Boolean
+  ) = withContext(Dispatchers.IO) {
+    peripheralDao.updateAntiLostConfig(address, enabled, alarmDisconnect, alarmConnect)
   }
 
   suspend fun deleteEvent(id: Long) = withContext(Dispatchers.IO) {

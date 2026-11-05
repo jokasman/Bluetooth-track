@@ -14,6 +14,8 @@ import com.example.data.model.BluetoothEventEntity
 import com.example.data.model.TrackedPeripheralEntity
 import com.example.data.repository.BluetoothTrackerRepository
 import com.example.notification.NotificationHelper
+import com.example.service.ActiveAlarmState
+import com.example.service.AntiLostAlarmManager
 import com.example.service.BluetoothMonitorService
 import com.example.util.PreferencesManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +49,10 @@ class BluetoothTrackerViewModel(application: Application) : AndroidViewModel(app
   val notifyOnDisconnect: StateFlow<Boolean> = prefs.notifyOnDisconnect
   val vibrateOnAlert: StateFlow<Boolean> = prefs.vibrateOnAlert
   val autoStartOnBoot: StateFlow<Boolean> = prefs.autoStartOnBoot
+  val globalAlertByDefault: StateFlow<Boolean> = prefs.globalAlertByDefault
+
+  // Active anti-lost emergency alarm state
+  val activeAlarm: StateFlow<ActiveAlarmState?> = AntiLostAlarmManager.activeAlarm
 
   val peripherals: StateFlow<List<TrackedPeripheralEntity>> = repository.allPeripherals
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -146,6 +152,7 @@ class BluetoothTrackerViewModel(application: Application) : AndroidViewModel(app
   fun setNotifyOnDisconnect(enabled: Boolean) = prefs.setNotifyOnDisconnect(enabled)
   fun setVibrateOnAlert(enabled: Boolean) = prefs.setVibrateOnAlert(enabled)
   fun setAutoStartOnBoot(enabled: Boolean) = prefs.setAutoStartOnBoot(enabled)
+  fun setGlobalAlertByDefault(enabled: Boolean) = prefs.setGlobalAlertByDefault(enabled)
 
   fun updateNickname(address: String, nickname: String?) {
     viewModelScope.launch {
@@ -163,6 +170,40 @@ class BluetoothTrackerViewModel(application: Application) : AndroidViewModel(app
     viewModelScope.launch {
       repository.toggleMuted(address)
     }
+  }
+
+  fun updateAlertMode(address: String, mode: String) {
+    viewModelScope.launch {
+      repository.updateAlertMode(address, mode)
+    }
+  }
+
+  fun updateAntiLostConfig(
+    address: String,
+    enabled: Boolean,
+    alarmDisconnect: Boolean,
+    alarmConnect: Boolean
+  ) {
+    viewModelScope.launch {
+      repository.updateAntiLostConfig(address, enabled, alarmDisconnect, alarmConnect)
+    }
+  }
+
+  fun dismissActiveAlarm() {
+    AntiLostAlarmManager.dismiss(getApplication())
+  }
+
+  fun snoozeActiveAlarm(minutes: Int = 2) {
+    AntiLostAlarmManager.snooze(getApplication(), minutes)
+  }
+
+  fun testAntiLostAlarm(name: String, address: String) {
+    AntiLostAlarmManager.startAlarm(
+      context = getApplication(),
+      deviceName = name,
+      deviceAddress = address,
+      triggerType = "DISCONNECTED"
+    )
   }
 
   fun deleteEvent(id: Long) {

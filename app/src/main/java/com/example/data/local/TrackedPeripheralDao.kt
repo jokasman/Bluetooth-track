@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.example.data.model.TrackedPeripheralEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -34,8 +33,19 @@ interface TrackedPeripheralDao {
   @Query("UPDATE tracked_peripherals SET isFavorite = NOT isFavorite WHERE deviceAddress = :address")
   suspend fun toggleFavorite(address: String)
 
-  @Query("UPDATE tracked_peripherals SET isMuted = NOT isMuted WHERE deviceAddress = :address")
+  @Query("UPDATE tracked_peripherals SET isMuted = NOT isMuted, alertMode = CASE WHEN isMuted = 1 THEN 'DEFAULT' ELSE 'MUTED' END WHERE deviceAddress = :address")
   suspend fun toggleMuted(address: String)
+
+  @Query("UPDATE tracked_peripherals SET alertMode = :alertMode WHERE deviceAddress = :address")
+  suspend fun updateAlertMode(address: String, alertMode: String)
+
+  @Query("UPDATE tracked_peripherals SET isAntiLostEnabled = :enabled, alarmOnDisconnect = :alarmDisconnect, alarmOnConnect = :alarmConnect WHERE deviceAddress = :address")
+  suspend fun updateAntiLostConfig(
+    address: String,
+    enabled: Boolean,
+    alarmDisconnect: Boolean,
+    alarmConnect: Boolean
+  )
 
   @Query("DELETE FROM tracked_peripherals WHERE deviceAddress = :address")
   suspend fun deletePeripheral(address: String)

@@ -22,15 +22,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -48,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -56,10 +58,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.TrackedPeripheralEntity
+import com.example.ui.components.ActiveAlarmBanner
 import com.example.ui.components.DeviceIconBadge
 import com.example.ui.components.PulsingDot
-import com.example.ui.dialogs.EditNicknameDialog
+import com.example.ui.dialogs.DeviceAlarmConfigDialog
 import com.example.ui.theme.ConnectedGreen
+import com.example.ui.theme.DisconnectedRed
 import com.example.ui.viewmodel.BluetoothTrackerViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -74,9 +78,10 @@ fun PeripheralsScreen(
   val context = LocalContext.current
   val peripherals by viewModel.peripherals.collectAsStateWithLifecycle()
   val pairedDevices by viewModel.pairedDevices.collectAsStateWithLifecycle()
+  val activeAlarm by viewModel.activeAlarm.collectAsStateWithLifecycle()
 
   var searchQuery by remember { mutableStateOf("") }
-  var editingPeripheral by remember { mutableStateOf<TrackedPeripheralEntity?>(null) }
+  var configuringPeripheral by remember { mutableStateOf<TrackedPeripheralEntity?>(null) }
 
   val filteredPeripherals = remember(peripherals, searchQuery) {
     if (searchQuery.isBlank()) peripherals
@@ -94,6 +99,17 @@ fun PeripheralsScreen(
     contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
     verticalArrangement = Arrangement.spacedBy(14.dp)
   ) {
+    // 0. Emergency Active Alarm Banner
+    if (activeAlarm != null) {
+      item {
+        ActiveAlarmBanner(
+          alarmState = activeAlarm,
+          onDismiss = { viewModel.dismissActiveAlarm() },
+          onSnooze = { viewModel.snoozeActiveAlarm(2) }
+        )
+      }
+    }
+
     item {
       Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -106,7 +122,7 @@ fun PeripheralsScreen(
             fontWeight = FontWeight.Bold
           )
           Text(
-            text = "Manage peripheral nicknames, alert mutes, and stats",
+            text = "Tap any peripheral to configure alerts & anti-lost protection",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -180,7 +196,7 @@ fun PeripheralsScreen(
       items(filteredPeripherals, key = { it.deviceAddress }) { peripheral ->
         PeripheralCard(
           peripheral = peripheral,
-          onEditNickname = { editingPeripheral = peripheral },
+          onConfigure = { configuringPeripheral = peripheral },
           onToggleFavorite = { viewModel.toggleFavorite(peripheral.deviceAddress) },
           onToggleMute = { viewModel.toggleMuted(peripheral.deviceAddress) },
           onDelete = { viewModel.deletePeripheral(peripheral.deviceAddress) }
@@ -236,12 +252,19 @@ fun PeripheralsScreen(
     }
   }
 
-  // Edit Nickname Modal
-  editingPeripheral?.let { item ->
-    EditNicknameDialog(
+  // Configure Device Alert & Anti-Lost Dialog
+  configuringPeripheral?.let { item ->
+    DeviceAlarmConfigDialog(
       peripheral = item,
-      onDismiss = { editingPeripheral = null },
-      onSave = { newNickname -> viewModel.updateNickname(item.deviceAddress, newNickname) }
+      onDismiss = { configuringPeripheral = null },
+      onSave = { newNickname, alertMode, antiLostEnabled, alarmDisconnect, alarmConnect ->
+        viewModel.updateNickname(item.deviceAddress, newNickname)
+        viewModel.updateAlertMode(item.deviceAddress, alertMode)
+        viewModel.updateAntiLostConfig(item.deviceAddress, antiLostEnabled, alarmDisconnect, alarmConnect)
+      },
+      onTestAlarm = {
+        viewModel.testAntiLostAlarm(item.displayName, item.deviceAddress)
+      }
     )
   }
 }
@@ -249,7 +272,7 @@ fun PeripheralsScreen(
 @Composable
 fun PeripheralCard(
   peripheral: TrackedPeripheralEntity,
-  onEditNickname: () -> Unit,
+  onConfigure: () -> Unit,
   onToggleFavorite: () -> Unit,
   onToggleMute: () -> Unit,
   onDelete: () -> Unit
@@ -270,14 +293,20 @@ fun PeripheralCard(
   Card(
     shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(
-      containerColor = if (peripheral.isConnected) {
+      containerColor = if (peripheral.isAntiLostEnabled) {
+        DisconnectedRed.copy(alpha = 0.08f)
+      } else if (peripheral.isConnected) {
         ConnectedGreen.copy(alpha = 0.08f)
       } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
       }
     ),
+    border = if (peripheral.isAntiLostEnabled) {
+      androidx.compose.foundation.BorderStroke(1.2.dp, DisconnectedRed.copy(alpha = 0.5f))
+    } else null,
     modifier = Modifier
       .fillMaxWidth()
+      .clickable(onClick = onConfigure)
       .testTag("peripheral_card_${peripheral.deviceAddress}")
   ) {
     Column(modifier = Modifier.padding(14.dp)) {
@@ -287,7 +316,7 @@ fun PeripheralCard(
       ) {
         DeviceIconBadge(
           deviceType = peripheral.deviceType,
-          tint = if (peripheral.isConnected) ConnectedGreen else MaterialTheme.colorScheme.primary
+          tint = if (peripheral.isAntiLostEnabled) DisconnectedRed else if (peripheral.isConnected) ConnectedGreen else MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -329,9 +358,17 @@ fun PeripheralCard(
           modifier = Modifier.size(36.dp)
         ) {
           Icon(
-            imageVector = if (peripheral.isMuted) Icons.Default.NotificationsOff else Icons.Default.Notifications,
+            imageVector = if (peripheral.isMuted || peripheral.alertMode == TrackedPeripheralEntity.ALERT_MODE_MUTED) {
+              Icons.Default.NotificationsOff
+            } else {
+              Icons.Default.Notifications
+            },
             contentDescription = "Toggle Mute Alerts",
-            tint = if (peripheral.isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            tint = if (peripheral.isMuted || peripheral.alertMode == TrackedPeripheralEntity.ALERT_MODE_MUTED) {
+              MaterialTheme.colorScheme.error
+            } else {
+              MaterialTheme.colorScheme.onSurfaceVariant
+            }
           )
         }
       }
@@ -373,45 +410,93 @@ fun PeripheralCard(
 
       Spacer(modifier = Modifier.height(8.dp))
 
-      // Stats row & action buttons
+      // Status Badges & Action Buttons
       Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth()
       ) {
-        Surface(
-          shape = RoundedCornerShape(8.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-          Text(
-            text = "${peripheral.totalConnectionCount} connects",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-          )
-        }
-        Spacer(modifier = Modifier.width(6.dp))
-        if (peripheral.isMuted) {
+        // Anti-Lost Badge
+        if (peripheral.isAntiLostEnabled) {
           Surface(
             shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.errorContainer
+            color = DisconnectedRed
           ) {
-            Text(
-              text = "Alerts Muted",
-              fontSize = 11.sp,
-              color = MaterialTheme.colorScheme.onErrorContainer,
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Default.Shield,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(12.dp)
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = "Anti-Lost Active",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+              )
+            }
+          }
+          Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        // Alert Policy Badge
+        when (peripheral.alertMode) {
+          TrackedPeripheralEntity.ALERT_MODE_ALWAYS_ALERT -> {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+              Text(
+                text = "Always Alert",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          }
+          TrackedPeripheralEntity.ALERT_MODE_MUTED -> {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = MaterialTheme.colorScheme.errorContainer
+            ) {
+              Text(
+                text = "Muted",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          }
+          else -> {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+              Text(
+                text = "${peripheral.totalConnectionCount} connects",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
           }
         }
+
         Spacer(modifier = Modifier.weight(1f))
 
         TextButton(
-          onClick = onEditNickname,
-          contentPadding = PaddingValues(horizontal = 8.dp)
+          onClick = onConfigure,
+          contentPadding = PaddingValues(horizontal = 8.dp),
+          modifier = Modifier.testTag("configure_peripheral_${peripheral.deviceAddress}")
         ) {
-          Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+          Icon(imageVector = Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("Nickname", fontSize = 12.sp)
+          Text("Configure", fontSize = 12.sp)
         }
 
         IconButton(

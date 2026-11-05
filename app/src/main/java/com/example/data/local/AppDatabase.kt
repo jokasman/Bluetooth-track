@@ -9,7 +9,7 @@ import com.example.data.model.TrackedPeripheralEntity
 
 @Database(
   entities = [BluetoothEventEntity::class, TrackedPeripheralEntity::class],
-  version = 1,
+  version = 2,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -23,11 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.BluetoothSearching
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Button
@@ -53,12 +55,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.BluetoothEventEntity
+import com.example.ui.components.ActiveAlarmBanner
 import com.example.ui.components.DeviceIconBadge
 import com.example.ui.components.EventStatusBadge
 import com.example.ui.components.PulsingDot
@@ -66,6 +70,7 @@ import com.example.ui.components.QuickStatCard
 import com.example.ui.dialogs.EventDetailDialog
 import com.example.ui.theme.ConnectedGreen
 import com.example.ui.theme.ConnectedGreenContainer
+import com.example.ui.theme.DisconnectedRed
 import com.example.ui.viewmodel.BluetoothTrackerViewModel
 
 @Composable
@@ -86,6 +91,7 @@ fun HomeScreen(
   val todayEventsCount by viewModel.todayEventsCount.collectAsStateWithLifecycle()
   val peripherals by viewModel.peripherals.collectAsStateWithLifecycle()
   val recentEvents by viewModel.recentEvents.collectAsStateWithLifecycle()
+  val activeAlarm by viewModel.activeAlarm.collectAsStateWithLifecycle()
 
   var selectedEventForDetail by remember { mutableStateOf<BluetoothEventEntity?>(null) }
 
@@ -96,6 +102,17 @@ fun HomeScreen(
     contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    // 0. Active Anti-Lost Emergency Alarm Banner
+    if (activeAlarm != null) {
+      item {
+        ActiveAlarmBanner(
+          alarmState = activeAlarm,
+          onDismiss = { viewModel.dismissActiveAlarm() },
+          onSnooze = { viewModel.snoozeActiveAlarm(2) }
+        )
+      }
+    }
+
     // 1. Service Status Hero Card
     item {
       ElevatedCard(
@@ -140,7 +157,7 @@ fun HomeScreen(
 
           Text(
             text = if (serviceEnabled) {
-              "Background service is watching for Bluetooth device connect & disconnect events."
+              "Background service is watching for Bluetooth device connect & disconnect events with anti-lost alarm protection."
             } else {
               "Turn on monitoring to receive instant heads-up alerts and log peripheral events."
             },
@@ -258,40 +275,65 @@ fun HomeScreen(
 
     // 4. Quick Actions
     item {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-      ) {
-        Button(
-          onClick = onOpenSimulateDialog,
-          modifier = Modifier
-            .weight(1f)
-            .testTag("open_simulate_dialog_button"),
-          shape = RoundedCornerShape(14.dp)
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-          Icon(
-            imageVector = Icons.Default.PlayArrow,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp)
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("Simulate Event")
+          Button(
+            onClick = onOpenSimulateDialog,
+            modifier = Modifier
+              .weight(1f)
+              .testTag("open_simulate_dialog_button"),
+            shape = RoundedCornerShape(14.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.PlayArrow,
+              contentDescription = null,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Simulate Event")
+          }
+
+          OutlinedButton(
+            onClick = { viewModel.testNotificationAlert(isConnected = true) },
+            modifier = Modifier
+              .weight(1f)
+              .testTag("quick_test_notification_button"),
+            shape = RoundedCornerShape(14.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Default.NotificationsActive,
+              contentDescription = null,
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Test Alert")
+          }
         }
 
+        // Test Anti-Lost Alarm button
         OutlinedButton(
-          onClick = { viewModel.testNotificationAlert(isConnected = true) },
+          onClick = {
+            viewModel.testAntiLostAlarm("My Headphones", "00:11:22:33:44:55")
+          },
           modifier = Modifier
-            .weight(1f)
-            .testTag("quick_test_notification_button"),
-          shape = RoundedCornerShape(14.dp)
+            .fillMaxWidth()
+            .testTag("test_anti_lost_alarm_home_button"),
+          shape = RoundedCornerShape(14.dp),
+          colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = DisconnectedRed
+          )
         ) {
           Icon(
-            imageVector = Icons.Default.NotificationsActive,
+            imageVector = Icons.Default.Campaign,
             contentDescription = null,
+            tint = DisconnectedRed,
             modifier = Modifier.size(18.dp)
           )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("Test Alert")
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Test Anti-Lost Alarm (Continuous Sound & Snooze)")
         }
       }
     }
@@ -363,7 +405,11 @@ fun HomeScreen(
         Card(
           shape = RoundedCornerShape(16.dp),
           colors = CardDefaults.cardColors(
-            containerColor = ConnectedGreenContainer.copy(alpha = 0.35f)
+            containerColor = if (peripheral.isAntiLostEnabled) {
+              DisconnectedRed.copy(alpha = 0.08f)
+            } else {
+              ConnectedGreenContainer.copy(alpha = 0.35f)
+            }
           ),
           modifier = Modifier
             .fillMaxWidth()
@@ -375,8 +421,8 @@ fun HomeScreen(
           ) {
             DeviceIconBadge(
               deviceType = peripheral.deviceType,
-              tint = ConnectedGreen,
-              containerColor = ConnectedGreenContainer
+              tint = if (peripheral.isAntiLostEnabled) DisconnectedRed else ConnectedGreen,
+              containerColor = if (peripheral.isAntiLostEnabled) DisconnectedRed.copy(alpha = 0.15f) else ConnectedGreenContainer
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -388,6 +434,21 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 PulsingDot(isActive = true)
+                if (peripheral.isAntiLostEnabled) {
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = DisconnectedRed
+                  ) {
+                    Text(
+                      text = "Anti-Lost",
+                      color = Color.White,
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                  }
+                }
               }
               Text(
                 text = "${peripheral.deviceType} • ${peripheral.deviceAddress}",

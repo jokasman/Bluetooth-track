@@ -70,6 +70,17 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Broadcast Receiver for Alarm Dismiss and Snooze Actions -->
+        <receiver
+            android:name=".receiver.AlarmActionReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.receiver.ACTION_DISMISS_ALARM" />
+                <action android:name="com.example.receiver.ACTION_SNOOZE_ALARM" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
