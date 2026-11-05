@@ -114,6 +114,24 @@ class BluetoothTrackerRepository(
     }
   }
 
+  suspend fun handleBluetoothDisabled() = withContext(Dispatchers.IO) {
+    val now = System.currentTimeMillis()
+    peripheralDao.getConnectedPeripheralsSnapshot().forEach { peripheral ->
+      val lastConnectEvent = eventDao.getLastConnectedEvent(peripheral.deviceAddress)
+      val duration = lastConnectEvent?.timestamp?.takeIf { it <= now }?.let { now - it }
+      eventDao.insertEvent(BluetoothEventEntity(
+        deviceName = peripheral.displayName,
+        deviceAddress = peripheral.deviceAddress,
+        deviceType = peripheral.deviceType,
+        eventType = "DISCONNECTED",
+        timestamp = now,
+        durationMs = duration,
+        note = "Bluetooth disabled"
+      ))
+      peripheralDao.markDisconnected(peripheral.deviceAddress, now, duration ?: 0L)
+    }
+  }
+
   suspend fun handleDeviceDisconnected(
     deviceName: String,
     deviceAddress: String,
@@ -132,6 +150,8 @@ class BluetoothTrackerRepository(
     }
 
     val existing = peripheralDao.getPeripheralByAddress(deviceAddress)
+    // Adapter shutdown and ACL disconnect broadcasts can describe the same transition.
+    if (!isSimulated && existing?.isConnected == false) return@withContext
     val displayName = existing?.displayName ?: deviceName
 
     // Log disconnection event

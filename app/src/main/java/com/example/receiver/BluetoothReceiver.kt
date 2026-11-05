@@ -20,6 +20,17 @@ class BluetoothReceiver : BroadcastReceiver() {
     val action = intent.action ?: return
     val repository = BluetoothTrackerRepository.getInstance(context)
 
+    if (action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+      if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR) == BluetoothAdapter.STATE_OFF) {
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+          try { repository.handleBluetoothDisabled() }
+          finally { pendingResult.finish() }
+        }
+      }
+      return
+    }
+
     val device: BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
     } else {

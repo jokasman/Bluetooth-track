@@ -18,6 +18,9 @@ interface TrackedPeripheralDao {
   @Query("SELECT * FROM tracked_peripherals WHERE deviceAddress = :address LIMIT 1")
   suspend fun getPeripheralByAddress(address: String): TrackedPeripheralEntity?
 
+  @Query("SELECT * FROM tracked_peripherals WHERE isConnected = 1")
+  suspend fun getConnectedPeripheralsSnapshot(): List<TrackedPeripheralEntity>
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertPeripheral(peripheral: TrackedPeripheralEntity)
 

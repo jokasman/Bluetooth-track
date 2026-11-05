@@ -3,11 +3,8 @@ package com.example.service
 import android.Manifest
 import android.app.NotificationManager
 import android.app.Service
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -15,7 +12,6 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.example.data.repository.BluetoothTrackerRepository
 import com.example.notification.NotificationHelper
-import com.example.receiver.BluetoothReceiver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,7 +22,6 @@ class BluetoothMonitorService : Service() {
 
   private val serviceJob = Job()
   private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
-  private var dynamicReceiver: BluetoothReceiver? = null
   private lateinit var repository: BluetoothTrackerRepository
   private var isInitialized = false
 
@@ -39,21 +34,6 @@ class BluetoothMonitorService : Service() {
   private fun setupMonitoring() {
     if (isInitialized) return
     isInitialized = true
-
-    // Register dynamic receiver for real-time Bluetooth ACL connection events
-    val filter = IntentFilter().apply {
-      addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-      addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-      addAction(BluetoothDevice.ACTION_ACL_DISCONNECT_REQUESTED)
-      addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
-    }
-    val receiver = BluetoothReceiver()
-    dynamicReceiver = receiver
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-    } else {
-      registerReceiver(receiver, filter)
-    }
 
     // Monitor connected count to update foreground notification
     serviceScope.launch {
@@ -117,11 +97,6 @@ class BluetoothMonitorService : Service() {
 
   override fun onDestroy() {
     super.onDestroy()
-    dynamicReceiver?.let {
-      try {
-        unregisterReceiver(it)
-      } catch (_: Exception) {}
-    }
     serviceJob.cancel()
   }
 
